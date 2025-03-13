@@ -71,7 +71,7 @@ jobs:
           DB_DATABASE: todo_test
           DB_USERNAME: root
           DB_PASSWORD:
-        run: php artisan test --parallel
+        run: php artisan test
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v3
