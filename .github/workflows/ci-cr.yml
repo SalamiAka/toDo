@@ -1,4 +1,4 @@
-name: Laravel Vue TodoApp CI/CD
+name: CI/CD Pipeline
 
 on:
   push:
@@ -7,105 +7,138 @@ on:
     branches: [ main ]
 
 jobs:
-  laravel-tests:
+  test:
+    name: Tests & Static Analysis
     runs-on: ubuntu-latest
 
     services:
       mysql:
         image: mysql:8.0
         env:
+          MYSQL_DATABASE: todo_test
+          MYSQL_USER: user
+          MYSQL_PASSWORD: password
           MYSQL_ROOT_PASSWORD: password
-          MYSQL_DATABASE: todo_app_test
         ports:
           - 3306:3306
         options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
 
     steps:
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-          extensions: mbstring, dom, fileinfo, mysql, gd, zip, exif, pcntl, bcmath
-          coverage: xdebug
-
       - uses: actions/checkout@v3
 
-      - name: Copy .env
-        run: cp .env.example .env
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, xml, ctype, iconv, intl, pdo_sqlite, pdo_mysql, bcmath, soap, zip, curl, gd
+          coverage: xdebug
 
-      - name: Cache Composer dependencies
+      - name: Cache Composer packages
+        id: composer-cache
         uses: actions/cache@v3
         with:
           path: vendor
-          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
-          restore-keys: ${{ runner.os }}-composer-
+          key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-php-
 
       - name: Install Dependencies
-        run: composer install --prefer-dist --no-interaction --no-progress
+        run: composer install -q --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
 
-      - name: Generate key
-        run: php artisan key:generate
-
-      - name: Configure Database
-        run: |
-          php artisan config:clear
-          php artisan migrate:fresh --seed --force
-
-      - name: Execute tests with coverage
-        run: vendor/bin/phpunit --coverage-clover=coverage.xml
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
         with:
-          file: ./coverage.xml
+          node-version: '20'
+          cache: 'npm'
 
-      - name: PHPStan analysis
-        run: ./vendor/bin/phpstan analyse --memory-limit=2G
+      - name: Install NPM dependencies
+        run: npm ci
 
-  build-and-push:
-    needs: laravel-tests
+      - name: Build assets
+        run: npm run build
+
+      - name: Prepare Laravel Application
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          chmod -R 777 storage bootstrap/cache
+
+      - name: Run Pest Tests
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: todo_test
+          DB_USERNAME: user
+          DB_PASSWORD: password
+        run: php artisan test --parallel
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v3
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  deploy-staging:
+    name: Deploy to Staging
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
 
     steps:
       - uses: actions/checkout@v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v1
 
-      - name: Login to DockerHub
-        uses: docker/login-action@v2
+      - name: Login to Docker Hub
+        uses: docker/login-action@v1
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-      - name: Build and push
-        uses: docker/build-push-action@v4
+      - name: Build and push Docker images
+        uses: docker/build-push-action@v2
         with:
           context: .
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/todo-app:latest,${{ secrets.DOCKERHUB_USERNAME }}/todo-app:${{ github.sha }}
-          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/todo-app:buildcache
-          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/todo-app:buildcache,mode=max
+          tags: |
+            ${{ secrets.DOCKER_HUB_USERNAME }}/todo-app:staging
+            ${{ secrets.DOCKER_HUB_USERNAME }}/todo-app:${{ github.sha }}
 
-  deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-
-    steps:
       - name: Deploy to staging server
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          key: ${{ secrets.SSH_KEY }}
-          port: ${{ secrets.SSH_PORT }}
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USERNAME }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
           script: |
-            cd /var/www/todo-app
+            cd /var/www/staging
             docker-compose pull
-            docker-compose down
             docker-compose up -d
             docker-compose exec -T app php artisan migrate --force
             docker-compose exec -T app php artisan config:cache
             docker-compose exec -T app php artisan route:cache
             docker-compose exec -T app php artisan view:cache
+
+#  deploy-production:
+#    name: Deploy to Production
+#    needs: [test, deploy-staging]
+#    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+#    runs-on: ubuntu-latest
+#    environment: production
+#
+#    steps:
+#      - name: Deploy to production server
+#        uses: appleboy/ssh-action@master
+#        with:
+#          host: ${{ secrets.PROD_HOST }}
+#          username: ${{ secrets.PROD_USERNAME }}
+#          key: ${{ secrets.PROD_SSH_KEY }}
+#          script: |
+#            cd /var/www/production
+#            docker-compose pull
+#            docker-compose up -d
+#            docker-compose exec -T app php artisan migrate --force
+#            docker-compose exec -T app php artisan config:cache
+#            docker-compose exec -T app php artisan route:cache
+#            docker-compose exec -T app php artisan view:cache

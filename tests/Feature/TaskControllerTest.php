@@ -20,7 +20,7 @@ class TaskControllerTest extends TestCase
     {
         $tasks = Task::factory(3)->create();
 
-        $response = $this->get('/api/tasks');
+        $response = $this->get('/api/v1/tasks');
 
         $response->assertStatus(200)
                 ->assertJson([
@@ -39,7 +39,7 @@ class TaskControllerTest extends TestCase
             'due_date' => '2024-12-31'
         ];
 
-        $response = $this->post('/api/tasks', $taskData);
+        $response = $this->post('/api/v1/tasks', $taskData);
 
         $response->assertStatus(201)
                 ->assertJson([
@@ -54,7 +54,7 @@ class TaskControllerTest extends TestCase
     {
         $task = Task::factory()->create();
 
-        $response = $this->get("/api/tasks/{$task->id}");
+        $response = $this->get("/api/v1/tasks/{$task->id}");
 
         $response->assertStatus(200)
                 ->assertJson([
@@ -72,7 +72,7 @@ class TaskControllerTest extends TestCase
             'status' => 'completed'
         ];
 
-        $response = $this->put("/api/tasks/{$task->id}", $updatedData);
+        $response = $this->put("/api/v1/tasks/{$task->id}", $updatedData);
 
         $response->assertStatus(200)
                 ->assertJson([
@@ -91,7 +91,7 @@ class TaskControllerTest extends TestCase
     {
         $task = Task::factory()->create();
 
-        $response = $this->delete("/api/tasks/{$task->id}");
+        $response = $this->delete("/api/v1/tasks/{$task->id}");
 
         $response->assertStatus(200)
                 ->assertJson([
@@ -104,7 +104,7 @@ class TaskControllerTest extends TestCase
 
     public function test_validates_required_fields_when_creating_task()
     {
-        $response = $this->post('/api/tasks', []);
+        $response = $this->postJson('/api/v1/tasks', []);
 
         $response->assertStatus(422)
                 ->assertJsonValidationErrors(['title']);
@@ -114,7 +114,7 @@ class TaskControllerTest extends TestCase
     {
         $task = Task::factory()->create();
 
-        $response = $this->put("/api/tasks/{$task->id}", [
+        $response = $this->putJson("/api/v1/tasks/{$task->id}", [
             'status' => 'invalid_status'
         ]);
 
