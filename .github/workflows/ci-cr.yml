@@ -69,8 +69,8 @@ jobs:
           DB_HOST: 127.0.0.1
           DB_PORT: 3306
           DB_DATABASE: todo_test
-          DB_USERNAME: user
-          DB_PASSWORD: password
+          DB_USERNAME: root
+          DB_PASSWORD:
         run: php artisan test --parallel
 
       - name: Upload coverage reports to Codecov
