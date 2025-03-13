@@ -69,8 +69,8 @@ jobs:
           DB_HOST: 127.0.0.1
           DB_PORT: 3306
           DB_DATABASE: todo_test
-          DB_USERNAME: root
-          DB_PASSWORD:
+          DB_USERNAME: user
+          DB_PASSWORD: password
         run: php artisan test
 
       - name: Upload coverage reports to Codecov
@@ -104,21 +104,21 @@ jobs:
           tags: |
             ${{ secrets.DOCKER_HUB_USERNAME }}/todo-app:staging
             ${{ secrets.DOCKER_HUB_USERNAME }}/todo-app:${{ github.sha }}
-
-      - name: Deploy to staging server
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.STAGING_HOST }}
-          username: ${{ secrets.STAGING_USERNAME }}
-          key: ${{ secrets.STAGING_SSH_KEY }}
-          script: |
-            cd /var/www/staging
-            docker-compose pull
-            docker-compose up -d
-            docker-compose exec -T app php artisan migrate --force
-            docker-compose exec -T app php artisan config:cache
-            docker-compose exec -T app php artisan route:cache
-            docker-compose exec -T app php artisan view:cache
+#
+#    - name: Deploy to staging server
+#      uses: appleboy/ssh-action@master
+#      with:
+#        host: ${{ secrets.STAGING_HOST }}
+#        username: ${{ secrets.STAGING_USERNAME }}
+#        key: ${{ secrets.STAGING_SSH_KEY }}
+#        script: |
+#          cd /var/www/staging
+#          docker-compose pull
+#          docker-compose up -d
+#          docker-compose exec -T app php artisan migrate --force
+#          docker-compose exec -T app php artisan config:cache
+#          docker-compose exec -T app php artisan route:cache
+#          docker-compose exec -T app php artisan view:cache
 
 #  deploy-production:
 #    name: Deploy to Production
@@ -128,17 +128,17 @@ jobs:
 #    environment: production
 #
 #    steps:
-#      - name: Deploy to production server
-#        uses: appleboy/ssh-action@master
-#        with:
-#          host: ${{ secrets.PROD_HOST }}
-#          username: ${{ secrets.PROD_USERNAME }}
-#          key: ${{ secrets.PROD_SSH_KEY }}
-#          script: |
-#            cd /var/www/production
-#            docker-compose pull
-#            docker-compose up -d
-#            docker-compose exec -T app php artisan migrate --force
-#            docker-compose exec -T app php artisan config:cache
-#            docker-compose exec -T app php artisan route:cache
-#            docker-compose exec -T app php artisan view:cache
+#    - name: Deploy to production server
+#      uses: appleboy/ssh-action@master
+#      with:
+#        host: ${{ secrets.PROD_HOST }}
+#        username: ${{ secrets.PROD_USERNAME }}
+#        key: ${{ secrets.PROD_SSH_KEY }}
+#        script: |
+#          cd /var/www/production
+#          docker-compose pull
+#          docker-compose up -d
+#          docker-compose exec -T app php artisan migrate --force
+#          docker-compose exec -T app php artisan config:cache
+#          docker-compose exec -T app php artisan route:cache
+#          docker-compose exec -T app php artisan view:cache
