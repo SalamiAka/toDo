@@ -1,0 +1,81 @@
+services:
+    nginx:
+        image: nginx:alpine
+        container_name: todo_nginx
+        restart: unless-stopped
+        ports:
+            - "80:80"
+        volumes:
+            - .:/var/www
+            - ./docker/nginx/conf.d:/etc/nginx/conf.d
+        depends_on:
+            - app
+        networks:
+            - app-network
+        healthcheck:
+            test: ["CMD", "curl", "-f", "http://localhost"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+
+    app:
+        build:
+            context: .
+            dockerfile: Dockerfile
+            args:
+                PUID: 1000
+                PGID: 1000
+        container_name: todo_app
+        image: salami351/todo-app:latest
+        restart: unless-stopped
+        volumes:
+            - .:/var/www
+            - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
+        ports:
+            - "5173:5173"
+        depends_on:
+            - db
+        networks:
+            - app-network
+        healthcheck:
+            test: ["CMD", "php", "-v"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+        environment:
+            DB_HOST: db
+            DB_DATABASE: ${DB_DATABASE:-laravel}
+            DB_USERNAME: ${DB_USERNAME:-laravel}
+            DB_PASSWORD: ${DB_PASSWORD:-password}
+            VITE_APP_HOST: "0.0.0.0"
+
+    db:
+        image: mysql:8.0
+        container_name: todo_db
+        restart: unless-stopped
+        environment:
+            MYSQL_DATABASE: ${DB_DATABASE:-laravel}
+            MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-password}
+            MYSQL_PASSWORD: ${DB_PASSWORD:-password}
+            MYSQL_USER: ${DB_USERNAME:-laravel}
+            SERVICE_TAGS: dev
+            SERVICE_NAME: mysql
+        volumes:
+            - mysql_data:/var/lib/mysql
+        networks:
+            - app-network
+        healthcheck:
+            test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+        ports:
+            - "3306:3307"
+
+networks:
+    app-network:
+        driver: bridge
+
+volumes:
+    mysql_data:
+        driver: local
